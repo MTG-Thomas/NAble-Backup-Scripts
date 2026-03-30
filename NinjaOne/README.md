@@ -62,6 +62,19 @@ Create these in **NinjaOne → Administration → Devices → Custom Fields** be
 
 ---
 
+## Configuration Pattern
+
+Use **NinjaOne Script Variables** for runtime tuning and **custom fields** for persistent device state or script output.
+
+For example, the monitor script reads `serverSuccessHours`, `workstationSuccessHours`, `synchThreshold`, `errorLimit`, and `writeCustomField` as script variables, while writing the summary to the device-level `coveMonitorStatus` custom field when enabled.
+
+Prefer this split during future script analysis:
+
+- **Script variables** for thresholds, limits, booleans, and other run-time behavior.
+- **Custom fields** for device-specific inputs, stored credentials, and output that should persist on the device.
+
+---
+
 ## Script Variables Quick Reference
 
 Each script reads NinjaOne Script Variables via `$env:variableName`.

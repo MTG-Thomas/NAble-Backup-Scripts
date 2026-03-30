@@ -265,6 +265,12 @@ For API-based scripts running on a **management workstation** (Reporting, Troubl
 | `coveApiUser` | Secure | Organisation | All API-based reporting/troubleshooting scripts |
 | `coveApiPassword` | Secure | Organisation | All API-based reporting/troubleshooting scripts |
 
+### Configuration rule
+
+When adapting scripts for NinjaOne, use **Script Policy parameters** for runtime tuning values and **custom fields** for persistent device data or script output.
+
+For the monitoring scripts, that means values like `serverSuccessHours`, `workstationSuccessHours`, `synchThreshold`, `errorLimit`, and `writeCustomField` should remain script variables, while status summaries such as `coveMonitorStatus` should be written to a device custom field.
+
 ---
 
 ## Scripts Requiring Full Rewrite (N-central/Legacy Coupling)
