@@ -62,7 +62,7 @@ if ($env:serverSuccessHours     -and [int]::TryParse($env:serverSuccessHours,   
 if ($env:workstationSuccessHours -and [int]::TryParse($env:workstationSuccessHours,[ref]$null)) { $WrkStnSuccessHoursInVal  = [int]$env:workstationSuccessHours }
 if ($env:synchThreshold          -and [int]::TryParse($env:synchThreshold,         [ref]$null)) { $SynchThreshold           = [int]$env:synchThreshold }
 if ($env:errorLimit              -and [int]::TryParse($env:errorLimit,             [ref]$null)) { $ErrorLimit               = [int]$env:errorLimit }
-if ($env:writeCustomField -ne $null -and $env:writeCustomField -ne '') { $WriteCustomField = $env:writeCustomField -ne 'false' }
+if ($env:writeCustomField -ne '') { $WriteCustomField = $env:writeCustomField -ne 'false' }
 
 $global:failed   = 0
 $global:output   = [System.Collections.Generic.List[string]]::new()
@@ -266,7 +266,7 @@ Function Get-Status ([int]$SynchThreshold) {
 }
 
 ## ---- Get per-datasource session stats and errors from StatusReport.xml ----
-Function Get-StatusReport {
+Function Get-StatusReport ([string]$ds) {
     if (-not (Test-Path $script:StatusReportxml)) {
         Out-Line "[$script:StatusReportxml] not found" -Warn
         return
@@ -299,7 +299,11 @@ Function Get-StatusReport {
         @('5','+'),@('6','&'),@('7','!'),@('8','#'),@('9','%')
     )
 
-    $XMLDataSource  = $ReplaceDatasourceforXMLLookup[$datasource]
+    $XMLDataSource = $ReplaceDatasourceforXMLLookup[$ds]
+    if (-not $XMLDataSource) {
+        Out-Line "Unknown datasource '$ds' — skipping" -Warn
+        return
+    }
     $PluginColorBar = $xml.SelectSingleNode("//Plugin$XMLDataSource-ColorBar")."#text"
 
     if ($PluginColorBar) {
@@ -311,10 +315,10 @@ Function Get-StatusReport {
 
         $LastSuccessStatusRaw = $xml.SelectSingleNode("//Plugin$XMLDataSource-LastSuccessfulSessionStatus")."#text"
         if ($null -eq $LastSuccessStatusRaw) {
-            Out-Line "`n[$datasource Session]"
+            Out-Line "`n[$ds Session]"
             Out-Line "28-Day Status             | $ColorBarReversed"
             Out-Line "Last Success              | Never"
-            Out-Line "No prior $datasource backup has completed" -Warn
+            Out-Line "No prior $ds backup has completed" -Warn
         } else {
             $LastSuccessStatus = $ReplaceStatus[$LastSuccessStatusRaw]
             $LastSuccessTime   = Convert-UnixTimeToDateTime($xml.SelectSingleNode("//Plugin$XMLDataSource-LastSuccessfulSessionTimestamp")."#text")
@@ -325,7 +329,7 @@ Function Get-StatusReport {
             $Retention         = $xml.SelectSingleNode("//Plugin$XMLDataSource-Retention")."#text"
             $RetentionUnits    = $xml.SelectSingleNode("//RetentionUnits")."#text"
 
-            Out-Line "`n[$datasource Session]"
+            Out-Line "`n[$ds Session]"
             Out-Line "28-Day Status             | $ColorBarReversed"
             Out-Line "Last Session (UTC)        | $LastSessionTime $LastSessionStatus"
             Out-Line "Last Success (UTC)        | $LastSuccessTime $LastSuccessStatus"
@@ -344,11 +348,11 @@ Function Get-StatusReport {
             }
 
             if ([int]$LastErrorCount -ge 1) {
-                Get-BackupErrors $datasource $ErrorLimit
+                Get-BackupErrors $ds $ErrorLimit
             }
         }
     } else {
-        Out-Line "No prior $datasource backup has completed" -Warn
+        Out-Line "No prior $ds backup has completed" -Warn
     }
 }
 
@@ -409,9 +413,9 @@ Get-StatusReportBase
 Get-Status $SynchThreshold
 Get-Datasources
 
-foreach ($datasource in $script:Datasources) {
+foreach ($ds in $script:Datasources) {
     Out-Line "`n--------- --------- --------- --------- --------- ---------"
-    Get-StatusReport
+    Get-StatusReport $ds
     Start-Sleep -Seconds 2
 }
 
