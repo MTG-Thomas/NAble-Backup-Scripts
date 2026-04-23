@@ -425,6 +425,83 @@ if ($WriteCustomField) {
     try { Ninja-Property-Set 'coveMonitorStatus' $summary } catch {}
 }
 
+## ---- Call Abstracted Webhook Sender ----
+## If failures detected, invoke the generic webhook sender with Cove context
+if ($global:failed -eq 1) {
+    $WebhookSenderPath = Join-Path (Split-Path $PSScriptRoot -Parent) "Automation\NinjaOne.SendWebhook.ps1"
+    
+    # Fallback: if not found relative to monitoring script, try common locations
+    if (-not (Test-Path $WebhookSenderPath)) {
+        $PossiblePaths = @(
+            "C:\NinjaOne\Scripts\NinjaOne.SendWebhook.ps1",
+            "C:\ProgramData\NinjaScripts\NinjaOne.SendWebhook.ps1",
+            "$env:NINJA_SCRIPT_PATH\NinjaOne.SendWebhook.ps1"
+        )
+        foreach ($path in $PossiblePaths) {
+            if (Test-Path $path) {
+                $WebhookSenderPath = $path
+                break
+            }
+        }
+    }
+    
+    # Get warning lines for the message
+    $warningLines = @($global:output | Where-Object { $_ -like "WARNING:*" })
+    $errorDetails = $warningLines -join "`n"
+    
+    # Build alert data as JSON for structured parsing
+    $AlertDataHash = @{
+        coveDeviceName   = $Script:CoveDeviceNameOutTxt
+        machineName      = $Script:MachineNameOutTxt
+        customerName     = $Script:CustomerNameOutTxt
+        osVersion        = $Script:OsVersionOutTxt
+        clientVersion    = $Script:ClientVerOutTxt
+        profileName      = $Script:ProfileNameOutTxt
+        lsvEnabled       = $Script:LSVEnabledOutTxt
+        cloudSyncStatus  = $Script:CloudSyncStatusOutTxt
+        totalSelectedGB  = $Script:TotalSelectedGBOutTxt
+        totalUsedGB      = $Script:TotalUsedGBOutTxt
+        errorCount       = $warningLines.Count
+        datasources      = $script:Datasources
+    }
+    $AlertDataJson = $AlertDataHash | ConvertTo-Json -Compress
+    
+    # Build the message
+    $Message = @"
+Cove Backup Failure Detected on $Script:CoveDeviceNameOutTxt ($Script:MachineNameOutTxt)
+
+Customer: $Script:CustomerNameOutTxt
+OS: $Script:OsVersionOutTxt
+Client Version: $Script:ClientVerOutTxt
+Profile: $Script:ProfileNameOutTxt
+
+Summary:
+$errorDetails
+
+Full Output:
+$($global:output -join "`n")
+"@
+    
+    if (Test-Path $WebhookSenderPath) {
+        try {
+            & $WebhookSenderPath `
+                -ConditionName "Cove Backup Failure" `
+                -Severity "MAJOR" `
+                -Priority "HIGH" `
+                -Message $Message `
+                -AlertData $AlertDataJson
+            
+            Write-Output "Webhook sender invoked: $WebhookSenderPath"
+        }
+        catch {
+            Write-Output "Warning: Webhook sender failed - $($_.Exception.Message)"
+        }
+    } else {
+        Write-Output "Warning: Webhook sender not found at $WebhookSenderPath"
+        Write-Output "Alert data available but webhook not sent."
+    }
+}
+
 ## ---- Exit with NinjaOne-compatible code ----
 if ($global:failed -eq 1) {
     Exit 1   ## Non-zero exit triggers NinjaOne condition alert
